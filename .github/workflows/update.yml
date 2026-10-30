@@ -1,7 +1,8 @@
 name: Обновление расписания и деплой
 
 # Settings → Pages → Build and deployment → Source: GitHub Actions.
-# Каждый запуск: забирает свежее расписание в data/, коммитит его и публикует сайт.
+# Каждый запуск: выгружает список всех групп и расписание каждой в data/ и публикует сайт.
+# data/ в git не хранится — она живёт только в опубликованном сайте.
 
 on:
   push:
@@ -11,7 +12,7 @@ on:
   workflow_dispatch:          # кнопка «Run workflow» — обновить и передеплоить вручную
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -22,6 +23,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
@@ -29,23 +31,14 @@ jobs:
         with:
           node-version: 22
 
-      - name: Забрать расписание с сайта вуза
-        id: fetch
-        continue-on-error: true   # сайт вуза недоступен — публикуем с прошлыми данными
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Забрать группы и расписание с сайта вуза
+        env:
+          PAGES_URL: ${{ steps.pages.outputs.base_url }}
         run: node scripts/fetch.mjs
 
-      - name: Закоммитить новые данные
-        if: steps.fetch.outcome == 'success'
-        run: |
-          git config user.name "schedule-bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data
-          git diff --cached --quiet && exit 0
-          git commit -m "Расписание обновлено $(date -u +'%Y-%m-%d %H:%M') UTC"
-          git pull --rebase origin main
-          git push origin HEAD:main
-
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: .
