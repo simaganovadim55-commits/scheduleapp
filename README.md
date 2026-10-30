@@ -5,7 +5,7 @@
 ## Как это работает
 1. GitHub Actions по расписанию запускает `scripts/fetch.mjs`.
 2. Скрипт берёт расписание из API РУЗ (`/api/search`, `/api/schedule/group/{id}`) и сохраняет в `data/`.
-3. Если что-то поменялось — коммитит и деплоит сайт на Pages.
+3. Если что-то поменялось — коммитит в `main`, и GitHub Pages сам пересобирает сайт.
 4. Мини-апп читает `data/*.json` со своего же домена (никаких проблем с CORS).
 
 ## Запуск за 5 минут
@@ -14,8 +14,8 @@
    ```json
    "groups": ["ЗК-24-1", "ЗК-24-2"]
    ```
-3. **Settings → Pages → Source: GitHub Actions.**
-4. **Actions → «Обновление расписания и деплой» → Run workflow.** Через минуту сайт будет на `https://<логин>.github.io/<репо>/`.
+3. **Settings → Pages → Build and deployment → Source: Deploy from a branch**, ветка `main`, папка `/ (root)` → Save. Через минуту сайт будет на `https://<логин>.github.io/<репо>/`.
+4. **Actions → «Обновление расписания» → Run workflow** — подтянет свежее расписание (дальше само каждые 3 часа).
 5. В [@BotFather](https://t.me/BotFather): `/newbot` → создать бота, затем `/mybots` → бот → **Bot Settings → Menu Button** → вставить ссылку на сайт. Кнопка «Расписание» появится в чате с ботом. Сервер для бота не нужен.
    - По желанию `/newapp` — получишь прямую ссылку вида `t.me/bot/app`. Можно открыть сразу нужную группу: `t.me/bot/app?startapp=<id группы>`.
 
@@ -38,9 +38,9 @@
 Если сайт вуза блокирует и Cloudflare, поиск будет работать только по группам из `config.json`. Добавляй туда все нужные группы — их расписание всегда будет под рукой.
 
 ## Если в Actions ошибка подключения
-Многие сайты вузов не пускают зарубежные IP, а серверы GitHub — за границей. Тогда сайт задеплоится с прошлыми данными, а обновлять можно так:
+Многие сайты вузов не пускают зарубежные IP, а серверы GitHub — за границей. Тогда workflow упадёт, но сайт продолжит работать с прошлыми данными, а обновлять можно так:
 - запускать с компьютера в РФ: `node scripts/fetch.mjs`, затем `git add data && git commit -m upd && git push`;
-- или подключить свой компьютер как self-hosted runner (Settings → Actions → Runners) и поменять `runs-on: ubuntu-latest` на `runs-on: self-hosted` в job `build`.
+- или подключить свой компьютер как self-hosted runner (Settings → Actions → Runners) и поменять `runs-on: ubuntu-latest` на `runs-on: self-hosted` в job `update`.
 
 ## Если API у сайта отличается
 Открой ruz.guz.ru, DevTools (F12) → Network → выбери группу и посмотри, какой запрос возвращает пары. Поля маппятся в функции `lesson()` в `scripts/fetch.mjs` — поправить там.
