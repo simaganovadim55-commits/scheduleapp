@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<title>Расписание</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#f2f2f7; --card:#ffffff; --text:#000000; --hint:#8e8e93; --sep:rgba(60,60,67,.18);
+  --accent:#007aff; --accent-text:#ffffff; --fill:rgba(118,118,128,.12);
+  --c-lec:#007aff; --c-prac:#34c759; --c-lab:#af52de; --c-exam:#ff3b30; --c-cons:#30b0c7; --c-other:#ff9500;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000000; --card:#1c1c1e; --text:#ffffff; --hint:#8e8e93; --sep:rgba(84,84,88,.6);
+    --accent:#0a84ff; --fill:rgba(118,118,128,.24);
+    --c-lec:#0a84ff; --c-prac:#30d158; --c-lab:#bf5af2; --c-exam:#ff453a; --c-cons:#40c8e0; --c-other:#ff9f0a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000000; --card:#1c1c1e; --text:#ffffff; --hint:#8e8e93; --sep:rgba(84,84,88,.6);
+  --accent:#0a84ff; --fill:rgba(118,118,128,.24);
+  --c-lec:#0a84ff; --c-prac:#30d158; --c-lab:#bf5af2; --c-exam:#ff453a; --c-cons:#40c8e0; --c-other:#ff9f0a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:17px/1.3 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;min-height:100vh;overscroll-behavior-y:none;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:10;padding:10px 16px 8px;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid transparent;transition:border-color .2s}
+.nav.scrolled{border-bottom-color:var(--sep)}
+.nav-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
+.group-btn{display:flex;align-items:center;gap:4px;color:var(--accent);font-size:17px;max-width:65%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-btn svg{flex:none}
+.today-btn{color:var(--accent);font-size:17px;opacity:1;transition:opacity .2s}
+.today-btn[hidden]{display:block;opacity:0;pointer-events:none}
+.title{font-size:34px;font-weight:700;letter-spacing:.37px;margin:6px 0 2px;line-height:1.15}
+.subtitle{color:var(--hint);font-size:15px;margin-bottom:10px;display:flex;gap:6px;align-items:center}
+
+/* week strip */
+.week{display:flex;align-items:center;gap:2px}
+.week-arrow{width:28px;height:52px;display:grid;place-items:center;color:var(--accent);flex:none;border-radius:10px}
+.week-arrow:active{background:var(--fill)}
+.days{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.day{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0 6px;border-radius:12px;position:relative}
+.day .wd{font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase}
+.day .num{font-size:19px;font-weight:500;width:34px;height:34px;display:grid;place-items:center;border-radius:50%;transition:background .2s,color .2s}
+.day .dot{width:5px;height:5px;border-radius:50%;background:var(--hint);opacity:0}
+.day.has .dot{opacity:.6}
+.day.today .num{color:var(--accent);font-weight:700}
+.day.sel .num{background:var(--accent);color:var(--accent-text);font-weight:700}
+.day.today.sel .num{background:var(--accent)}
+.day.weekend .wd{opacity:.6}
+
+/* ---------- content ---------- */
+.content{padding:8px 16px 0;touch-action:pan-y}
+.section-h{font-size:13px;color:var(--hint);text-transform:uppercase;margin:18px 16px 7px;letter-spacing:-.08px}
+.list{background:var(--card);border-radius:var(--radius);overflow:hidden}
+.lesson{display:flex;gap:12px;padding:12px 16px;width:100%;text-align:left;position:relative;transition:background .15s}
+.lesson:active{background:var(--fill)}
+.lesson+.lesson::before{content:"";position:absolute;top:0;left:84px;right:0;border-top:.5px solid var(--sep)}
+.time{width:56px;flex:none;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;justify-content:space-between}
+.time b{font-size:16px;font-weight:600}
+.time span{font-size:14px;color:var(--hint)}
+.bar{width:4px;border-radius:2px;flex:none;background:var(--k)}
+.info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.disc{font-size:16px;font-weight:600;line-height:1.25}
+.meta{font-size:14px;color:var(--hint);display:flex;flex-wrap:wrap;gap:2px 10px}
+.meta i{font-style:normal;display:inline-flex;align-items:center;gap:4px}
+.meta svg{flex:none;opacity:.9}
+.tag{align-self:flex-start;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;
+  color:var(--k);background:color-mix(in srgb,var(--k) 14%,transparent)}
+.lesson.now{background:color-mix(in srgb,var(--accent) 7%,var(--card))}
+.progress{height:3px;border-radius:2px;background:var(--fill);margin-top:6px;overflow:hidden}
+.progress div{height:100%;background:var(--accent);border-radius:2px}
+.lesson.past .disc,.lesson.past .time b{opacity:.45}
+.gap{display:flex;align-items:center;gap:10px;color:var(--hint);font-size:13px;margin:8px 16px}
+.gap::before,.gap::after{content:"";flex:1;border-top:.5px dashed var(--sep)}
+.empty{text-align:center;padding:64px 24px;color:var(--hint)}
+.empty .big{font-size:48px;margin-bottom:12px}
+.empty b{display:block;color:var(--text);font-size:20px;margin-bottom:6px}
+.footer{text-align:center;color:var(--hint);font-size:12px;margin:22px 0 8px}
+.slide-l{animation:sl .22s ease-out}.slide-r{animation:sr .22s ease-out}
+@keyframes sl{from{opacity:0;transform:translateX(24px)}}@keyframes sr{from{opacity:0;transform:translateX(-24px)}}
+
+/* ---------- sheet ---------- */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--bg);border-radius:14px 14px 0 0;
+  max-height:88vh;display:flex;flex-direction:column;transform:translateY(105%);
+  transition:transform .32s cubic-bezier(.2,.9,.3,1);padding-bottom:env(safe-area-inset-bottom)}
+.sheet.open{transform:none}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--sep);margin:6px auto 0}
+.sheet-h{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px}
+.sheet-h h2{font-size:17px;font-weight:600;margin:0}
+.sheet-h button{color:var(--accent);font-size:17px}
+.sheet-body{overflow:auto;padding:0 16px 20px;-webkit-overflow-scrolling:touch}
+.search{display:flex;align-items:center;gap:6px;background:var(--fill);border-radius:10px;padding:8px 10px;margin:6px 0 14px;color:var(--hint)}
+.search input{flex:1;border:0;outline:0;background:none;font:inherit;color:var(--text);font-size:17px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;width:100%;text-align:left;position:relative;background:var(--card)}
+.row+.row::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--sep)}
+.row:active{background:var(--fill)}
+.row .k{color:var(--hint);flex:none}
+.row .v{text-align:right;word-break:break-word}
+.row .check{color:var(--accent);font-weight:700}
+.detail-title{font-size:22px;font-weight:700;margin:4px 0 6px;line-height:1.2}
+.nores{color:var(--hint);text-align:center;padding:24px}
+.row small{display:block;color:var(--hint);font-size:13px;margin-top:2px}
+.row.hint{color:var(--hint);justify-content:flex-start;gap:10px;font-size:15px}
+button.row.hint{color:var(--accent)}
+.sheet .section-h{margin:14px 16px 7px}
+.sheet{min-height:60vh}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--fill);border-top-color:var(--hint);animation:spin .8s linear infinite;flex:none}
+.spin.big-spin{width:34px;height:34px;border-width:3px;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pill{background:var(--accent);color:var(--accent-text);border-radius:12px;padding:10px 22px;font-weight:600}
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <div class="nav-top">
+    <button class="group-btn" id="groupBtn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span id="groupName">Выбрать группу</span>
+    </button>
+    <button class="today-btn" id="todayBtn" hidden>Сегодня</button>
+  </div>
+  <h1 class="title" id="title">Расписание</h1>
+  <div class="subtitle" id="subtitle"></div>
+  <div class="week">
+    <button class="week-arrow" id="prevW" aria-label="Прошлая неделя"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="days" id="days"></div>
+    <button class="week-arrow" id="nextW" aria-label="Следующая неделя"><svg width="12" height="20" viewBox="0 0 12 20"><path d="m2 2 8 8-8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+</header>
+
+<main class="content" id="content"></main>
+
+<div class="overlay" id="overlay"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="sheet-h"><h2 id="sheetTitle"></h2><button id="sheetClose">Готово</button></div>
+  <div class="sheet-body" id="sheetBody"></div>
+</section>
+
+<script>
+(() => {
+'use strict';
+const tg = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined ? window.Telegram.WebApp : null;
+const inTG = !!(tg && tg.platform && tg.platform !== 'unknown');
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- Telegram theme ---------- */
+function applyTheme(){
+  if (!inTG) return;
+  const p = tg.themeParams || {}, r = document.documentElement.style;
+  document.documentElement.dataset.theme = tg.colorScheme === 'dark' ? 'dark' : 'light';
+  if (p.secondary_bg_color) r.setProperty('--bg', p.secondary_bg_color);
+  if (p.bg_color) r.setProperty('--card', p.section_bg_color || p.bg_color);
+  if (p.text_color) r.setProperty('--text', p.text_color);
+  if (p.hint_color) r.setProperty('--hint', p.hint_color);
+  if (p.button_color) r.setProperty('--accent', p.button_color);
+  if (p.button_text_color) r.setProperty('--accent-text', p.button_text_color);
+  try { tg.setHeaderColor('secondary_bg_color'); tg.setBackgroundColor('secondary_bg_color'); } catch(e){}
+}
+if (inTG){
+  tg.ready(); tg.expand();
+  try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch(e){}
+  applyTheme(); tg.onEvent('themeChanged', applyTheme);
+}
+const haptic = (t='select') => { try {
+  if (!inTG) return;
+  t === 'select' ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred(t);
+} catch(e){} };
+
+/* ---------- storage ---------- */
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){}
+    try { inTG && tg.CloudStorage && tg.CloudStorage.setItem(k, v); } catch(e){} },
+  cloud(k){ return new Promise(res => { try {
+    if (!inTG || !tg.CloudStorage) return res(null);
+    tg.CloudStorage.getItem(k, (err, v) => res(err ? null : (v || null)));
+  } catch(e){ res(null); } }); }
+};
+
+/* ---------- dates ---------- */
+const WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const WDF = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+const MON = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const pad = n => String(n).padStart(2,'0');
+const key = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const monday = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); return addDays(x, -((x.getDay()+6)%7)); };
+const mins = t => { const [h,m] = String(t).split(':').map(Number); return h*60+m; };
+const today = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
+const nowMin = () => { const n = new Date(); return n.getHours()*60+n.getMinutes(); };
+const dur = m => { const h = Math.floor(m/60), r = m%60; return (h ? h+' ч ' : '') + (r ? r+' мин' : '').trim(); };
+
+/* ---------- lesson kinds ---------- */
+function kindColor(k){
+  k = (k||'').toLowerCase();
+  if (/экзам|зач[её]т|аттест|контрол/.test(k)) return 'var(--c-exam)';
+  if (/лаб/.test(k)) return 'var(--c-lab)';
+  if (/лекц/.test(k)) return 'var(--c-lec)';
+  if (/практ|семин/.test(k)) return 'var(--c-prac)';
+  if (/консул/.test(k)) return 'var(--c-cons)';
+  return 'var(--c-other)';
+}
+const ICON = {
+  pin:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  user:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  cap:'<svg width="14" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 9 12 4 2 9l10 5 10-5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg>',
+  search:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>'
+};
+
+/* ---------- demo data (used when data/ is not reachable, e.g. local preview) ---------- */
+function demo(){
+  const m = monday(today()), L = [];
+  const add = (d, s, e, title, kind, room, teacher) => L.push({date:key(addDays(m,d)), start:s, end:e, title, kind, room, building:'Главный корпус', teacher});
+  add(0,'09:00','10:30','Геодезия','Лекция','201','Петров А. В.');
+  add(0,'10:40','12:10','Высшая математика','Практические занятия','314','Смирнова Е. Н.');
+  add(0,'13:00','14:30','Земельное право','Лекция','105','Козлов Д. И.');
+  add(1,'10:40','12:10','Картография','Лабораторные работы','Ауд. 12, комп. класс','Орлова М. С.');
+  add(1,'12:20','13:50','Иностранный язык','Практические занятия','408','Белова Т. А.');
+  add(2,'09:00','10:30','Физическая культура','Практические занятия','Спортзал','');
+  add(2,'13:00','14:30','Геодезия','Лабораторные работы','220','Петров А. В.');
+  add(2,'14:40','16:10','Высшая математика','Лекция','301','Смирнова Е. Н.');
+  add(3,'10:40','12:10','Экономика','Семинар','117','Никитин П. Р.');
+  add(4,'09:00','10:30','Кадастр недвижимости','Лекция','201','Фролова И. Г.');
+  add(4,'10:40','12:10','Кадастр недвижимости','Практические занятия','215','Фролова И. Г.');
+  add(4,'15:00','16:30','Земельное право','Консультация','105','Козлов Д. И.');
+  add(5,'09:00','10:30','Картография','Зачёт','Ауд. 12','Орлова М. С.');
+  return { group:{id:'demo', name:'Демо-группа'}, updated:new Date().toISOString(), lessons:L };
+}
+
+/* ---------- живая загрузка с сайта вуза ---------- */
+const RUZ = {
+  base: 'https://ruz.guz.ru',
+  proxy: '',            // адрес своего бесплатного прокси (Cloudflare Worker), см. README. Пусто — только напрямую
+  weeksBack: 1, weeksAhead: 8
+};
+const ruzDate = d => `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())}`;
+async function ruzGet(p){
+  const urls = [RUZ.base + p];
+  if (RUZ.proxy) urls.push(RUZ.proxy.replace(/\/$/, '') + p);
+  let last;
+  for (const u of urls){
+    const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 12000);
+    try {
+      const r = await fetch(u, {signal: ctrl.signal});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch(e){ last = e; } finally { clearTimeout(t); }
+  }
+  throw last;
+}
+const normLesson = x => ({
+  date: String(x.date).slice(0,10).replace(/\./g,'-'), start: x.beginLesson, end: x.endLesson,
+  title: x.discipline || x.disciplineName || '', kind: x.kindOfWork || '',
+  room: x.auditorium || '', building: x.building || '', teacher: x.lecturer_title || x.lecturer || '',
+  subgroup: x.subGroup || '', stream: x.stream || '', note: x.note || x.comment || ''
+});
+const normName = s => String(s || '').trim().toLowerCase().replace(/\s+/g, '');
+async function searchGroups(term){
+  const res = await ruzGet(`/api/search?term=${encodeURIComponent(term.trim())}&type=group`);
+  return (Array.isArray(res) ? res : res.data || [])
+    .map(x => ({id: String(x.id), name: x.label ?? x.name, desc: x.description || ''}))
+    .filter(x => x.id && x.name);
+}
+async function liveSchedule(g){
+  const m = monday(today()), s = addDays(m, -7*RUZ.weeksBack), f = addDays(m, 7*RUZ.weeksAhead - 1);
+  const raw = await ruzGet(`/api/schedule/group/${encodeURIComponent(g.id)}?start=${ruzDate(s)}&finish=${ruzDate(f)}&lng=1`);
+  const lessons = (Array.isArray(raw) ? raw : raw.data || []).map(normLesson)
+    .sort((a,b) => (a.date + a.start).localeCompare(b.date + b.start));
+  return {group: {id: g.id, name: g.name}, updated: new Date().toISOString(), live: true, lessons};
+}
+
+/* ---------- state ---------- */
+const S = { groups:[], group:null, data:null, byDate:{}, sel:today(), week:monday(today()), loading:false };
+
+async function getJSON(url){
+  const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), {cache:'no-store'});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function loadGroups(){
+  try { S.groups = await getJSON('data/groups.json'); } catch(e){ S.groups = []; }
+  if (!Array.isArray(S.groups)) S.groups = [];
+}
+const isPrefetched = g => S.groups.some(x => String(x.id) === String(g.id));
+function setData(data){
+  S.data = data; S.byDate = {};
+  for (const l of data.lessons || []) (S.byDate[l.date] ||= []).push(l);
+  for (const k in S.byDate) S.byDate[k].sort((a,b) => mins(a.start) - mins(b.start));
+}
+function saveCache(g, data){ try { localStorage.setItem('sched:' + g.id, JSON.stringify(data)); } catch(e){} }
+async function loadSchedule(g){
+  let data = null;
+  if (g.id === 'demo') data = demo();
+  else {
+    if (isPrefetched(g)) { try { data = await getJSON(`data/schedule/${encodeURIComponent(g.id)}.json`); } catch(e){} }
+    if (!data) { try { data = await liveSchedule(g); } catch(e){} }
+    if (data) saveCache(g, data);
+    else {
+      try { data = JSON.parse(localStorage.getItem('sched:' + g.id)); if (data) data.stale = true; } catch(e){}
+      if (!data) data = {group: g, lessons: [], error: true};
+    }
+  }
+  setData(data);
+}
+// у выгруженных групп тихо проверяем сайт — вдруг там уже свежее, чем в последней выгрузке
+async function refreshLive(g){
+  if (g.id === 'demo' || !S.data || S.data.live) return;
+  try {
+    const fresh = await liveSchedule(g);
+    if (S.group !== g) return;
+    saveCache(g, fresh);
+    if (JSON.stringify(fresh.lessons) !== JSON.stringify(S.data.lessons)){ setData(fresh); render(); }
+    else { S.data.live = true; S.data.updated = fresh.updated; renderDay(); }
+  } catch(e){}
+}
+async function chooseGroup(g){
+  S.group = g;
+  store.set('group', JSON.stringify({id: g.id, name: g.name}));
+  try {
+    const rec = JSON.parse(localStorage.getItem('recent') || '[]').filter(x => String(x.id) !== String(g.id));
+    rec.unshift({id: g.id, name: g.name}); localStorage.setItem('recent', JSON.stringify(rec.slice(0, 6)));
+  } catch(e){}
+  S.loading = true; render();
+  await loadSchedule(g);
+  S.loading = false;
+  if (S.group !== g) return;
+  render(); refreshLive(g);
+}
+
+/* ---------- render ---------- */
+function renderHeader(){
+  $('groupName').textContent = S.group ? S.group.name : 'Выбрать группу';
+  const d = S.sel, t = today();
+  const diff = Math.round((d - t) / 864e5);
+  $('title').textContent = diff === 0 ? 'Сегодня' : diff === 1 ? 'Завтра' : diff === -1 ? 'Вчера' : WDF[d.getDay()];
+  const n = (S.byDate[key(d)] || []).length;
+  $('subtitle').textContent = `${diff>=-1 && diff<=1 ? WDF[d.getDay()].toLowerCase()+', ' : ''}${d.getDate()} ${MON[d.getMonth()]}` +
+    (n ? ` · ${n} ${plural(n,'пара','пары','пар')}` : '');
+  $('todayBtn').hidden = key(d) === key(t);
+}
+const plural = (n,a,b,c) => { const m10 = n%10, m100 = n%100; return m10===1 && m100!==11 ? a : m10>=2 && m10<=4 && (m100<10||m100>=20) ? b : c; };
+
+function renderWeek(){
+  const t = key(today()), s = key(S.sel);
+  $('days').innerHTML = Array.from({length:7}, (_, i) => {
+    const d = addDays(S.week, i), k = key(d);
+    const cls = ['day', k===t && 'today', k===s && 'sel', S.byDate[k] && 'has', i>=5 && 'weekend'].filter(Boolean).join(' ');
+    return `<button class="${cls}" data-k="${k}"><span class="wd">${WD[d.getDay()]}</span><span class="num">${d.getDate()}</span><span class="dot"></span></button>`;
+  }).join('');
+}
+
+function renderDay(dir){
+  const k = key(S.sel), list = S.byDate[k] || [];
+  const isToday = k === key(today()), now = nowMin();
+  const isPast = S.sel < today();
+  let html = '';
+  if (S.loading){
+    html = `<div class="empty"><div class="spin big-spin"></div><b>Загружаю расписание</b>${esc(S.group ? S.group.name : '')}</div>`;
+  } else if (S.data && S.data.error){
+    html = `<div class="empty"><div class="big">📡</div><b>Не получилось загрузить</b>Сайт вуза не ответил или не пускает запросы из браузера.<br><br><button class="pill" id="retry">Повторить</button></div>`;
+  } else if (!list.length){
+    const wk = S.sel.getDay() === 0;
+    html = `<div class="empty"><div class="big">${wk ? '🌿' : '☕️'}</div><b>Пар нет</b>${wk ? 'Воскресенье — отдыхаем' : 'Можно выдохнуть'}</div>`;
+  } else {
+    html += '<div class="list">';
+    list.forEach((l, i) => {
+      if (i){
+        const g = mins(l.start) - mins(list[i-1].end);
+        if (g >= 30) html += `</div><div class="gap">Окно ${dur(g)}</div><div class="list">`;
+      }
+      const s = mins(l.start), e = mins(l.end);
+      const live = isToday && now >= s && now < e, past = isPast || (isToday && now >= e);
+      const room = l.room ? l.room + (l.building && !l.room.includes(l.building) ? ` (${l.building})` : '') : '';
+      const grpName = S.group ? normName(S.group.name) : '';
+      const stream = l.stream && normName(l.stream) !== grpName ? l.stream : '';
+      html += `<button class="lesson${live?' now':''}${past?' past':''}" style="--k:${kindColor(l.kind)}" data-i="${i}">
+        <div class="time"><b>${esc(l.start)}</b><span>${esc(l.end)}</span></div>
+        <div class="bar"></div>
+        <div class="info">
+          <div class="disc">${esc(l.title)}</div>
+          ${l.kind ? `<span class="tag">${esc(l.kind)}</span>` : ''}
+          <div class="meta">${room ? `<i>${ICON.pin}${esc(room)}</i>` : ''}${l.teacher ? `<i>${ICON.user}${esc(l.teacher)}</i>` : ''}${l.subgroup ? `<i>${esc(l.subgroup)}</i>` : ''}${stream ? `<i>${ICON.cap}Поток ${esc(stream)}</i>` : ''}</div>
+          ${live ? `<div class="progress"><div style="width:${Math.round((now-s)/(e-s)*100)}%"></div></div>
+            <div class="meta"><i>До конца ${dur(e-now)}</i></div>` : ''}
+        </div></button>`;
+    });
+    html += '</div>';
+    if (isToday){
+      const next = list.find(l => mins(l.start) > now);
+      if (next && !list.some(l => now >= mins(l.start) && now < mins(l.end)))
+        html = `<div class="section-h" style="margin-top:6px">Следующая пара через ${dur(mins(next.start)-now)}</div>` + html;
+    }
+  }
+  if (!S.loading && S.data && S.data.updated){
+    const u = new Date(S.data.updated);
+    const pre = S.data.group && S.data.group.id === 'demo' ? 'Демо-данные · выбери свою группу сверху'
+      : S.data.stale ? 'Нет связи с сайтом · сохранённая копия от' : S.data.live ? 'С сайта вуза ·' : 'Обновлено';
+    html += `<div class="footer">${pre}${S.data.group && S.data.group.id === 'demo' ? '' : ` ${u.getDate()} ${MON[u.getMonth()]}, ${pad(u.getHours())}:${pad(u.getMinutes())}`}</div>`;
+  }
+  const c = $('content');
+  c.innerHTML = html;
+  const rb = $('retry'); if (rb) rb.onclick = () => S.group && chooseGroup(S.group);
+  c.classList.remove('slide-l','slide-r'); void c.offsetWidth;
+  if (dir) c.classList.add(dir > 0 ? 'slide-l' : 'slide-r');
+}
+
+function render(dir){ renderHeader(); renderWeek(); renderDay(dir); }
+
+function select(d, dir){
+  const prev = S.sel;
+  S.sel = d; S.week = monday(d);
+  haptic();
+  render(dir ?? Math.sign(d - prev));
+}
+
+/* ---------- sheets ---------- */
+let sheetClose = null;
+function openSheet(title, body, onClose){
+  $('sheetTitle').textContent = title;
+  $('sheetBody').innerHTML = body;
+  $('sheetBody').scrollTop = 0;
+  $('overlay').classList.add('open'); $('sheet').classList.add('open');
+  sheetClose = onClose || null;
+  if (inTG){ try { tg.BackButton.show(); } catch(e){} }
+}
+function closeSheet(){
+  $('overlay').classList.remove('open'); $('sheet').classList.remove('open');
+  if (inTG){ try { tg.BackButton.hide(); } catch(e){} }
+  const f = sheetClose; sheetClose = null; f && f();
+}
+if (inTG) tg.BackButton.onClick(closeSheet);
+$('overlay').onclick = closeSheet; $('sheetClose').onclick = closeSheet;
+
+function openLesson(l){
+  const rows = [
+    ['Время', `${l.start} – ${l.end}`], ['Тип', l.kind], ['Аудитория', l.room], ['Корпус', l.building],
+    ['Преподаватель', l.teacher], ['Подгруппа', l.subgroup], ['Поток', l.stream], ['Примечание', l.note]
+  ].filter(r => r[1]);
+  const d = new Date(l.date + 'T00:00');
+  openSheet('Пара', `<div class="detail-title">${esc(l.title)}</div>
+    <div class="subtitle">${WDF[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</div>
+    <div class="list">${rows.map(r => `<div class="row"><span class="k">${r[0]}</span><span class="v">${esc(r[1])}</span></div>`).join('')}</div>`);
+}
+
+function openGroups(){
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem('recent') || '[]'); } catch(e){}
+  const known = [...recent, ...S.groups.filter(g => !recent.some(r => String(r.id) === String(g.id)))];
+  let remote = {q:'', state:'idle', items:[]}, timer = null, seq = 0;
+  const pool = new Map();
+  const rowsHtml = list => `<div class="list">${list.map(g => { pool.set(String(g.id), g); return `<button class="row" data-id="${esc(g.id)}">
+      <span>${esc(g.name)}${g.desc ? `<small>${esc(g.desc)}</small>` : ''}</span>
+      ${S.group && String(S.group.id) === String(g.id) ? '<span class="check">✓</span>' : ''}</button>`; }).join('')}</div>`;
+  const draw = () => {
+    const q = normName($('gq').value);
+    const local = known.filter(g => !q || normName(g.name).includes(q));
+    let html = '';
+    if (local.length) html += `<div class="section-h">${q ? 'Найдено' : 'Мои группы'}</div>` + rowsHtml(local);
+    if (q.length >= 2){
+      const extra = remote.items.filter(g => !local.some(l => String(l.id) === String(g.id)));
+      html += `<div class="section-h">На сайте вуза</div>`;
+      if (remote.state === 'loading') html += `<div class="list"><div class="row hint"><span class="spin"></span>Ищу «${esc($('gq').value.trim())}»…</div></div>`;
+      else if (remote.state === 'error') html += `<div class="list"><button class="row hint" data-retry>Сайт вуза не ответил. Повторить</button></div>`;
+      else if (extra.length) html += rowsHtml(extra);
+      else if (remote.state === 'done') html += `<div class="list"><div class="row hint">${local.length ? 'Других групп нет' : 'Группа не найдена — проверь написание'}</div></div>`;
+    } else if (!local.length) html += '<div class="nores">Введи название группы, например З.КН.24.Б7</div>';
+    $('glist').innerHTML = html;
+  };
+  const lookup = () => {
+    const q = $('gq').value.trim();
+    clearTimeout(timer);
+    if (normName(q).length < 2){ remote = {q, state:'idle', items:[]}; draw(); return; }
+    remote = {q, state:'loading', items:[]}; draw();
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      try { const items = await searchGroups(q); if (my === seq){ remote = {q, state:'done', items}; draw(); } }
+      catch(e){ if (my === seq){ remote = {q, state:'error', items:[]}; draw(); } }
+    }, 350);
+  };
+  openSheet('Группа', `<label class="search">${ICON.search}<input id="gq" placeholder="Например, З.КН.24.Б7" autocomplete="off" autocapitalize="characters" enterkeyhint="search" spellcheck="false"></label><div id="glist"></div>`);
+  draw();
+  $('gq').oninput = lookup;
+  $('gq').onkeydown = e => {
+    if (e.key !== 'Enter') return;
+    const q = normName(e.target.value);
+    const all = [...known, ...remote.items];
+    const hit = all.find(g => normName(g.name) === q) || (all.filter(g => normName(g.name).includes(q)).length === 1 && all.find(g => normName(g.name).includes(q)));
+    if (hit){ haptic('light'); closeSheet(); chooseGroup(hit); } else e.target.blur();
+  };
+  $('glist').onclick = e => {
+    if (e.target.closest('[data-retry]')) return lookup();
+    const b = e.target.closest('[data-id]'); if (!b) return;
+    haptic('light'); closeSheet(); chooseGroup(pool.get(b.dataset.id));
+  };
+  if (!inTG || tg.platform !== 'ios') setTimeout(() => { try { $('gq').focus(); } catch(e){} }, 350);
+}
+
+/* ---------- events ---------- */
+$('days').onclick = e => { const b = e.target.closest('[data-k]'); if (b) select(new Date(b.dataset.k + 'T00:00')); };
+$('prevW').onclick = () => select(addDays(S.sel, -7), -1);
+$('nextW').onclick = () => select(addDays(S.sel, 7), 1);
+$('todayBtn').onclick = () => select(today());
+$('groupBtn').onclick = openGroups;
+$('content').onclick = e => { const b = e.target.closest('.lesson'); if (b) openLesson((S.byDate[key(S.sel)]||[])[+b.dataset.i]); };
+window.addEventListener('scroll', () => $('nav').classList.toggle('scrolled', scrollY > 4), {passive:true});
+
+let tx = 0, ty = 0;
+$('content').addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+$('content').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) select(addDays(S.sel, dx < 0 ? 1 : -1));
+}, {passive:true});
+
+setInterval(() => { if (key(S.sel) === key(today())) renderDay(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+
+/* ---------- boot ---------- */
+(async () => {
+  await loadGroups();
+  const qs = new URLSearchParams(location.search);
+  const startParam = inTG && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+  let want = qs.get('group') || startParam || store.get('group') || await store.cloud('group');
+  let g = null;
+  if (want){
+    try { const o = JSON.parse(want); if (o && o.id) g = o; } catch(e){}
+    if (!g) g = S.groups.find(x => String(x.id) === String(want) || normName(x.name) === normName(want));
+    if (!g && want === 'demo') g = {id:'demo', name:'Демо-группа'};
+    if (!g){ // имя группы из ссылки — ищем на сайте
+      try { g = (await searchGroups(want)).find(x => normName(x.name) === normName(want)) || null; } catch(e){}
+    }
+  }
+  if (!g && S.groups.length === 1) g = S.groups[0];
+  if (g) chooseGroup(g);
+  else { await loadSchedule({id:'demo'}); render(); openGroups(); }
+})();
+})();
+</script>
+</body>
+</html>

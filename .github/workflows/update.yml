@@ -1,0 +1,55 @@
+name: Обновление расписания и деплой
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */3 * * *'   # каждые 3 часа
+  workflow_dispatch:          # кнопка «Run workflow» вручную
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: schedule
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Забрать расписание с сайта вуза
+        id: fetch
+        continue-on-error: true   # если сайт недоступен — сайт всё равно задеплоится со старыми данными
+        run: node scripts/fetch.mjs
+
+      - name: Закоммитить новые данные
+        if: steps.fetch.outcome == 'success'
+        run: |
+          git config user.name "schedule-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || (git commit -m "Расписание обновлено $(date -u +'%Y-%m-%d %H:%M') UTC" && git push)
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
