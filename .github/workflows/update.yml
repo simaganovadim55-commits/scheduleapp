@@ -1,25 +1,26 @@
-name: Обновление расписания
+name: Обновление расписания и деплой
 
-# Сайт публикуется через GitHub Pages «Deploy from a branch» (main, / (root)).
-# Этот workflow только обновляет data/ и коммитит в main — Pages пересобирается сам.
+# Settings → Pages → Build and deployment → Source: GitHub Actions.
+# Каждый запуск: забирает свежее расписание в data/, коммитит его и публикует сайт.
 
 on:
   push:
     branches: [main]
-    paths: [config.json, scripts/**]
   schedule:
     - cron: '17 */3 * * *'   # каждые 3 часа
-  workflow_dispatch:          # кнопка «Run workflow» вручную
+  workflow_dispatch:          # кнопка «Run workflow» — обновить и передеплоить вручную
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: schedule
   cancel-in-progress: false
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,9 +30,12 @@ jobs:
           node-version: 22
 
       - name: Забрать расписание с сайта вуза
+        id: fetch
+        continue-on-error: true   # сайт вуза недоступен — публикуем с прошлыми данными
         run: node scripts/fetch.mjs
 
       - name: Закоммитить новые данные
+        if: steps.fetch.outcome == 'success'
         run: |
           git config user.name "schedule-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -40,3 +44,18 @@ jobs:
           git commit -m "Расписание обновлено $(date -u +'%Y-%m-%d %H:%M') UTC"
           git pull --rebase origin main
           git push origin HEAD:main
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
