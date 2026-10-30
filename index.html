@@ -488,7 +488,7 @@ async function chooseGroup(g){
   store.set('group', JSON.stringify({id: g.id, name: g.name}));
   try {
     const rec = JSON.parse(localStorage.getItem('recent') || '[]').filter(x => String(x.id) !== String(g.id));
-    rec.unshift({id: g.id, name: g.name}); localStorage.setItem('recent', JSON.stringify(rec.slice(0, 6)));
+    rec.unshift({id: g.id, name: g.name, desc: g.desc || ''}); localStorage.setItem('recent', JSON.stringify(rec.slice(0, 6)));
   } catch(e){}
   S.loading = true; render();
   await loadSchedule(g);
@@ -853,34 +853,51 @@ function openMore(){
   };
 }
 
+// ключ для поиска: без регистра, пробелов и точек; «3» = «З», латинские двойники = кириллица
+const LAT = {a:'а',b:'в',c:'с',e:'е',h:'н',k:'к',m:'м',o:'о',p:'р',t:'т',x:'х',y:'у',z:'з'};
+const skey = s => normName(s).replace(/[.\-_/]/g, '').replace(/[a-z]/g, c => LAT[c] || c).replace(/з/g, '3');
+function findGroups(q){
+  const k = skey(q); if (!k) return [];
+  return S.groups.map(g => {
+    const n = g._k || (g._k = skey(g.name)), i = n.indexOf(k);
+    return {g, r: i === 0 ? 0 : i > 0 ? 1 : skey(g.desc).includes(k) ? 2 : -1};
+  }).filter(x => x.r >= 0).sort((a,b) => a.r - b.r || a.g.name.localeCompare(b.g.name, 'ru', {numeric:true})).map(x => x.g);
+}
 function openGroups(){
   let recent = [];
   try { recent = JSON.parse(localStorage.getItem('recent') || '[]'); } catch(e){}
-  const known = [...recent, ...S.groups.filter(g => !recent.some(r => String(r.id) === String(g.id)))];
-  let remote = {q:'', state:'idle', items:[]}, timer = null, seq = 0;
+  let remote = {q:'', state:'idle', items:[]}, timer = null, seq = 0, local = [];
+  const LIMIT = 60;
   const pool = new Map();
   const rowsHtml = list => `<div class="list">${list.map(g => { pool.set(String(g.id), g); return `<button class="row" data-id="${esc(g.id)}">
       <span>${esc(g.name)}${g.desc ? `<small>${esc(g.desc)}</small>` : ''}</span>
       ${S.group && String(S.group.id) === String(g.id) ? `<span class="check">${ic('check')}</span>` : ''}</button>`; }).join('')}</div>`;
   const draw = () => {
-    const q = normName($('gq').value);
-    const local = known.filter(g => !q || normName(g.name).includes(q));
+    const raw = $('gq').value.trim();
     let html = '';
-    if (local.length) html += `<div class="section-h">${q ? 'Найдено' : 'Мои группы'}</div>` + rowsHtml(local);
-    if (q.length >= 2){
-      const extra = remote.items.filter(g => !local.some(l => String(l.id) === String(g.id)));
-      html += `<div class="section-h">На сайте вуза</div>`;
-      if (remote.state === 'loading') html += `<div class="list"><div class="row hint"><span class="spin"></span>Ищу «${esc($('gq').value.trim())}»…</div></div>`;
-      else if (remote.state === 'error') html += `<div class="list"><button class="row hint" data-retry>Сайт вуза не ответил. Повторить</button></div>`;
-      else if (extra.length) html += rowsHtml(extra);
-      else if (remote.state === 'done') html += `<div class="list"><div class="row hint">${local.length ? 'Других групп нет' : 'Группа не найдена — проверь написание'}</div></div>`;
-    } else if (!local.length) html += '<div class="nores">Введи название группы, например З.КН.24.Б7</div>';
+    if (!skey(raw)){
+      if (recent.length) html += `<div class="section-h">Недавние</div>` + rowsHtml(recent);
+      html += `<div class="nores">Начни вводить название — например, З.КН или 24.Б7${S.groups.length > 1 ? `<br>В базе ${S.groups.length} ${plural(S.groups.length,'группа','группы','групп')}` : ''}</div>`;
+    } else {
+      if (local.length){
+        html += `<div class="section-h">Найдено · ${local.length}</div>` + rowsHtml(local.slice(0, LIMIT));
+        if (local.length > LIMIT) html += `<div class="section-f">Показаны первые ${LIMIT} — уточни запрос</div>`;
+      } else if (skey(raw).length >= 2){
+        // в базе нет — пробуем сайт вуза напрямую
+        html += `<div class="section-h">На сайте вуза</div>`;
+        if (remote.state === 'loading') html += `<div class="list"><div class="row hint"><span class="spin"></span>Ищу «${esc(raw)}»…</div></div>`;
+        else if (remote.state === 'error') html += `<div class="list"><div class="row hint">Группа «${esc(raw)}» не найдена — проверь написание</div></div>`;
+        else if (remote.items.length) html += rowsHtml(remote.items);
+        else if (remote.state === 'done') html += `<div class="list"><div class="row hint">Группа не найдена — проверь написание</div></div>`;
+      }
+    }
     $('glist').innerHTML = html;
   };
   const lookup = () => {
     const q = $('gq').value.trim();
-    clearTimeout(timer);
-    if (normName(q).length < 2){ remote = {q, state:'idle', items:[]}; draw(); return; }
+    clearTimeout(timer); seq++;
+    local = findGroups(q);
+    if (local.length || skey(q).length < 2){ remote = {q, state:'idle', items:[]}; draw(); return; }
     remote = {q, state:'loading', items:[]}; draw();
     timer = setTimeout(async () => {
       const my = ++seq;
@@ -893,13 +910,11 @@ function openGroups(){
   $('gq').oninput = lookup;
   $('gq').onkeydown = e => {
     if (e.key !== 'Enter') return;
-    const q = normName(e.target.value);
-    const all = [...known, ...remote.items];
-    const hit = all.find(g => normName(g.name) === q) || (all.filter(g => normName(g.name).includes(q)).length === 1 && all.find(g => normName(g.name).includes(q)));
+    const k = skey(e.target.value), all = local.length ? local : remote.items;
+    const hit = all.find(g => skey(g.name) === k) || (all.length === 1 && all[0]);
     if (hit){ haptic('light'); closeSheet(); chooseGroup(hit); } else e.target.blur();
   };
   $('glist').onclick = e => {
-    if (e.target.closest('[data-retry]')) return lookup();
     const b = e.target.closest('[data-id]'); if (!b) return;
     haptic('light'); closeSheet(); chooseGroup(pool.get(b.dataset.id));
   };
@@ -942,7 +957,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !$
   let g = null;
   if (want){
     try { const o = JSON.parse(want); if (o && o.id) g = o; } catch(e){}
-    if (!g) g = S.groups.find(x => String(x.id) === String(want) || normName(x.name) === normName(want));
+    if (!g) g = S.groups.find(x => String(x.id) === String(want) || skey(x.name) === skey(want));
     if (!g && want === 'demo') g = {id:'demo', name:'Демо-группа'};
     if (!g){ // имя группы из ссылки — ищем на сайте
       try { g = (await searchGroups(want)).find(x => normName(x.name) === normName(want)) || null; } catch(e){}
