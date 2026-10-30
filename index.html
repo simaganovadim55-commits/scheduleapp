@@ -151,6 +151,7 @@ button.row:active{background:var(--fill)}
 button.row.hint{color:var(--accent)}
 .row.danger{color:var(--o-red)}
 .row.act{color:var(--accent);justify-content:flex-start;gap:12px}
+.row.center{justify-content:center;font-weight:600}
 .sq{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;background:var(--c);flex:none}
 .sq .ic{width:18px;height:18px}
 .irow{display:flex;align-items:center;gap:12px;padding:10px 16px;position:relative;min-height:56px}
@@ -679,12 +680,19 @@ function noteEditor(title){
   const n = notes.get(title);
   return `<div class="section-h">Заметка к предмету</div>
     <div class="list"><textarea class="note" id="noteTa" placeholder="Например: взять тетрадь, сдать ДЗ до пятницы…">${esc(n ? n.text : '')}</textarea></div>
-    <div class="section-f">Видна у всех пар по этому предмету и сохраняется в Telegram.</div>`;
+    <div class="section-f">Видна у всех пар по этому предмету и сохраняется в Telegram.</div>
+    ${n ? '<div class="section-h"></div><div class="list"><button class="row danger center" data-delnote>Удалить заметку</button></div>' : ''}`;
 }
 function bindNote(title){
   const ta = $('noteTa'); if (!ta) return;
   let t = null;
   ta.oninput = () => { clearTimeout(t); t = setTimeout(() => notes.set(title, ta.value), 400); };
+  const del = $('sheetBody').querySelector('[data-delnote]');
+  if (del) del.onclick = e => {
+    e.stopPropagation();
+    clearTimeout(t); ta.value = ''; notes.set(title, '');
+    haptic('medium'); closeSheet(); toast('Заметка удалена');
+  };
   return () => { clearTimeout(t); notes.set(title, ta.value); };
 }
 function openNote(title){
@@ -837,9 +845,16 @@ const actions = {
     try { navigator.clipboard.writeText(link).then(() => toast('Ссылка скопирована')); } catch(e){ toast(link); }
   },
   clearNotes(){
-    const go = ok => { if (!ok) return; store.set('notes', '{}'); render(); toast('Заметки удалены'); };
-    if (inTG && tg.showConfirm) { try { return tg.showConfirm('Удалить все заметки?', go); } catch(e){} }
-    go(confirm('Удалить все заметки?'));
+    // своё подтверждение: confirm() и tg.showConfirm в некоторых клиентах Telegram молча не показываются
+    const n = Object.keys(notes.all()).length;
+    openSheet('Заметки', `<div class="dhead"><div class="detail-title">Удалить все заметки?</div>
+      <div class="dsub">${n} ${plural(n,'заметка будет удалена','заметки будут удалены','заметок будут удалены')} без возможности восстановления.</div></div>
+      <div class="section-h"></div>
+      <div class="list"><button class="row danger center" data-yes>Удалить все заметки</button><button class="row act center" data-no>Отмена</button></div>`);
+    $('sheetBody').onclick = e => {
+      if (e.target.closest('[data-yes]')){ store.set('notes', '{}'); haptic('medium'); closeSheet(); toast('Заметки удалены'); }
+      else if (e.target.closest('[data-no]')) closeSheet();
+    };
   }
 };
 function openMore(){
