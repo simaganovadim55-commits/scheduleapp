@@ -12,19 +12,19 @@
   --accent:#1a73f5; --accent-text:#ffffff; --fill:rgba(118,118,128,.12); --chip:#e8ecf3;
   --shadow:0 1px 2px rgba(16,24,40,.04),0 6px 18px rgba(16,24,40,.06);
   --c-lec:#1a73f5; --c-prac:#2fb457; --c-lab:#9a4fe0; --c-exam:#ff3b30; --c-credit:#8a909c; --c-cons:#25a8c2; --c-other:#ff9500;
-  --o-blue:#1a73f5; --o-green:#34c759; --o-orange:#ff9500; --o-purple:#af52de; --o-teal:#30b0c7; --o-indigo:#5856d6; --o-yellow:#ffcc00; --o-gray:#8e8e93; --o-red:#ff3b30;
+  --o-blue:#1a73f5; --o-green:#34c759; --o-orange:#ff9500; --o-purple:#af52de; --o-teal:#30b0c7; --o-indigo:#5856d6; --o-yellow:#ffcc00; --o-gray:#8e8e93; --o-red:#ff3b30; --seg-on:#ffffff;
   --radius:18px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#000000; --card:#1c1c1e; --text:#ffffff; --hint:#8e8e93; --sep:rgba(84,84,88,.55);
-    --accent:#0a84ff; --fill:rgba(118,118,128,.24); --chip:#2c2c2e; --shadow:none;
+    --accent:#0a84ff; --fill:rgba(118,118,128,.24); --chip:#2c2c2e; --shadow:none; --seg-on:#636366;
     --c-lec:#0a84ff; --c-prac:#30d158; --c-lab:#bf5af2; --c-exam:#ff453a; --c-credit:#98989f; --c-cons:#40c8e0; --c-other:#ff9f0a;
   }
 }
 :root[data-theme="dark"]{
   --bg:#000000; --card:#1c1c1e; --text:#ffffff; --hint:#8e8e93; --sep:rgba(84,84,88,.55);
-  --accent:#0a84ff; --fill:rgba(118,118,128,.24); --chip:#2c2c2e; --shadow:none;
+  --accent:#0a84ff; --fill:rgba(118,118,128,.24); --chip:#2c2c2e; --shadow:none; --seg-on:#636366;
   --c-lec:#0a84ff; --c-prac:#30d158; --c-lab:#bf5af2; --c-exam:#ff453a; --c-credit:#98989f; --c-cons:#40c8e0; --c-other:#ff9f0a;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -159,10 +159,11 @@ button.row.hint{color:var(--accent)}
 .irow div{min-width:0;word-break:break-word}
 .seg{display:flex;background:var(--fill);border-radius:9px;padding:2px;margin:0;width:100%}
 .seg button{flex:1;text-align:center;font-size:14px;font-weight:500;padding:7px 4px;border-radius:7px;transition:background .2s}
-.seg button.on{background:var(--card);box-shadow:0 2px 6px rgba(0,0,0,.12);font-weight:600}
+.seg button.on{background:var(--seg-on);box-shadow:0 2px 6px rgba(0,0,0,.12);font-weight:600}
 .subj .body{gap:6px}
 .subj .sub{font-size:14px;color:var(--hint)}
 .tags{display:flex;flex-wrap:wrap;gap:6px}
+.credit{text-align:center;font-size:12px;color:var(--hint);opacity:.45;letter-spacing:.4px;margin:28px 0 4px}
 .notecard{display:block;width:100%;background:var(--card);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow);text-align:left}
 .notecard b{display:block;font-size:16px;font-weight:600;margin-bottom:5px}
 .notecard p{margin:0;font-size:15px;line-height:1.4;white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
@@ -716,6 +717,7 @@ function renderSettings(){
       ${nNotes ? `<button class="row with-ico danger" data-act="clearNotes"><span class="k">${sq('note','red')}Удалить все заметки</span><span class="v">${nNotes}</span></button>` : ''}
     </div>
     <div class="section-f">Расписание выгружается автоматически каждые 3 часа и работает без интернета.</div>
+    <div class="credit">prod. by simvol</div>
   </div>`;
   $('pg-settings').onclick = e => {
     const th = e.target.closest('[data-theme]');
